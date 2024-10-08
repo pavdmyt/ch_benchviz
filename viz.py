@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
-import re
 import plotly.express as px
 import plotly.graph_objects as go
+import re
 
 
 def parse_benchmark_output(text):
@@ -18,6 +18,32 @@ def parse_benchmark_output(text):
             data.append({"percentile": float(percentile), "latency": float(latency)})
 
     return pd.DataFrame(data)
+
+
+def create_summary_bar_chart(df):
+    """Create a bar chart for key percentiles."""
+    key_percentiles = [50.0, 95.0, 99.0]
+    summary_data = df[df["percentile"].isin(key_percentiles)].copy()
+    summary_data["percentile_label"] = summary_data["percentile"].apply(
+        lambda x: f"P{int(x)}"
+    )
+
+    fig = px.bar(
+        summary_data,
+        x="percentile_label",
+        y="latency",
+        title="Key Percentile Latencies",
+        labels={"percentile_label": "Percentile", "latency": "Latency (seconds)"},
+    )
+
+    fig.update_traces(
+        marker_color="rgb(136, 132, 216)",
+        hovertemplate="Percentile: %{x}<br>Latency: %{y:.3f} sec<extra></extra>",
+    )
+
+    fig.update_layout(bargap=0.4, showlegend=False)
+
+    return fig
 
 
 def main():
@@ -70,7 +96,6 @@ def main():
                 showlegend=False,
             )
 
-            # Add custom hover template
             fig1.update_traces(
                 hovertemplate="Percentile: %{x:.2f}<br>Latency: %{y:.3f} sec<extra></extra>"
             )
@@ -106,6 +131,8 @@ def main():
 
         # Display summary statistics
         st.subheader("Summary Statistics")
+
+        # Display metrics
         col3, col4, col5 = st.columns(3)
 
         with col3:
@@ -125,6 +152,9 @@ def main():
                 "P99 Latency",
                 f"{df[df['percentile'] == 99.0]['latency'].iloc[0]:.3f} sec",
             )
+
+        # Add bar chart for summary statistics
+        st.plotly_chart(create_summary_bar_chart(df), use_container_width=True)
 
         # Show the processed data
         st.subheader("Raw Data")
