@@ -4,6 +4,23 @@ import plotly.express as px
 import plotly.graph_objects as go
 import re
 
+DEFAULT_DATA = """clickhouse-systemlogs-eu-aiven-management-pavdmyt-test.avns.net:20001, queries: 30, QPS: 28.404, RPS: 17619645.884, MiB/s: 566.200, result RPS: 59733.005, result MiB/s: 14.272.
+
+0.000%          0.013 sec.
+10.000%         0.013 sec.
+20.000%         0.013 sec.
+30.000%         0.013 sec.
+40.000%         0.013 sec.
+50.000%         0.013 sec.
+60.000%         0.013 sec.
+70.000%         0.014 sec.
+80.000%         0.015 sec.
+90.000%         0.017 sec.
+95.000%         0.020 sec.
+99.000%         0.024 sec.
+99.900%         0.024 sec.
+99.990%         0.024 sec."""
+
 
 def parse_status_string(text):
     """Parse the benchmark status string into a dictionary."""
@@ -105,25 +122,9 @@ def main():
 
     # Input area for benchmark data
     st.subheader("Input Benchmark Data")
-    default_data = """clickhouse-systemlogs-eu-aiven-management-pavdmyt-test.avns.net:20001, queries: 30, QPS: 28.404, RPS: 17619645.884, MiB/s: 566.200, result RPS: 59733.005, result MiB/s: 14.272.
-
-0.000%          0.013 sec.
-10.000%         0.013 sec.
-20.000%         0.013 sec.
-30.000%         0.013 sec.
-40.000%         0.013 sec.
-50.000%         0.013 sec.
-60.000%         0.013 sec.
-70.000%         0.014 sec.
-80.000%         0.015 sec.
-90.000%         0.017 sec.
-95.000%         0.020 sec.
-99.000%         0.024 sec.
-99.900%         0.024 sec.
-99.990%         0.024 sec."""
 
     benchmark_text = st.text_area(
-        "Paste your benchmark results here:", value=default_data, height=300
+        "Paste your benchmark results here:", value=DEFAULT_DATA, height=300
     )
 
     if benchmark_text:
