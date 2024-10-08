@@ -4,6 +4,9 @@ import plotly.express as px
 import plotly.graph_objects as go
 import re
 
+import sqlparse
+
+
 DEFAULT_DATA = """clickhouse-systemlogs-eu-aiven-management-pavdmyt-test.avns.net:20001, queries: 30, QPS: 28.404, RPS: 17619645.884, MiB/s: 566.200, result RPS: 59733.005, result MiB/s: 14.272.
 
 0.000%          0.013 sec.
@@ -19,7 +22,22 @@ DEFAULT_DATA = """clickhouse-systemlogs-eu-aiven-management-pavdmyt-test.avns.ne
 95.000%         0.020 sec.
 99.000%         0.024 sec.
 99.900%         0.024 sec.
-99.990%         0.024 sec."""
+99.990%         0.024 sec.
+"""
+
+DEFAULT_QUERY = """SELECT
+    toStartOfFiveMinute(timestamp) AS ts,
+    countDistinct(user_id) AS users
+FROM user_actions
+WHERE timestamp >= now() - INTERVAL '1 hour'
+GROUP BY ts
+ORDER BY ts DESC
+"""
+
+
+def format_sql(query):
+    """Format the SQL query."""
+    return sqlparse.format(query, reindent=True, keyword_case="upper")
 
 
 def parse_status_string(text):
@@ -123,8 +141,23 @@ def main():
     # Input area for benchmark data
     st.subheader("Input Benchmark Data")
 
+    # Add query input field
+    query_text = st.text_area(
+        "Query being benchmarked:",
+        value=DEFAULT_QUERY,
+        height=150,
+        help="Enter the ClickHouse query that was used in the benchmark",
+    )
+
+    # Add some visual separation
+    st.markdown("---")
+
+    # Existing benchmark results input
     benchmark_text = st.text_area(
-        "Paste your benchmark results here:", value=DEFAULT_DATA, height=300
+        "Benchmark results:",
+        value=DEFAULT_DATA,
+        height=300,
+        help="Paste the complete benchmark output including the status line and percentile data",
     )
 
     if benchmark_text:
@@ -140,7 +173,12 @@ def main():
                 f"Number of queries executed: **{status_data['queries']}**"
             )
 
-            # Create two columns for performance metrics
+            # Display formatted SQL query
+            st.subheader("Benchmarked Query")
+            formatted_sql = format_sql(query_text)
+            st.code(formatted_sql, language="sql")
+
+            # Display performance metrics
             col1, col2, col3 = st.columns(3)
 
             with col1:
