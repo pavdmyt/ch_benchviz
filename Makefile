@@ -1,6 +1,6 @@
 .PHONY: fmt
 fmt:
-	uvx ruff format vix.py
+	uvx ruff format viz.py
 
 .PHONY: run
 run:

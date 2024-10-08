@@ -5,6 +5,27 @@ import plotly.graph_objects as go
 import re
 
 
+def parse_status_string(text):
+    """Parse the benchmark status string into a dictionary."""
+    # Find the status string using regex
+    status_match = re.search(
+        r"([\w.-]+:\d+),\s*queries:\s*(\d+),\s*QPS:\s*([\d.]+),\s*RPS:\s*([\d.]+),\s*MiB/s:\s*([\d.]+),\s*result RPS:\s*([\d.]+),\s*result MiB/s:\s*([\d.]+)",
+        text,
+    )
+
+    if status_match:
+        return {
+            "endpoint": status_match.group(1),
+            "queries": int(status_match.group(2)),
+            "qps": float(status_match.group(3)),
+            "rps": float(status_match.group(4)),
+            "mib_s": float(status_match.group(5)),
+            "result_rps": float(status_match.group(6)),
+            "result_mib_s": float(status_match.group(7).rstrip(".")),
+        }
+    return None
+
+
 def parse_benchmark_output(text):
     """Parse the benchmark output text into a DataFrame."""
     lines = text.strip().split("\n")
@@ -46,6 +67,37 @@ def create_summary_bar_chart(df):
     return fig
 
 
+def create_performance_metrics_chart(status_data):
+    """Create a bar chart for performance metrics."""
+    # Prepare data for visualization
+    metrics = [
+        {"metric": "QPS", "value": status_data["qps"]},
+        {"metric": "RPS (M/sec)", "value": status_data["rps"] / 1_000_000},
+        {"metric": "MiB/s", "value": status_data["mib_s"]},
+        {"metric": "Result RPS (K/sec)", "value": status_data["result_rps"] / 1_000},
+        {"metric": "Result MiB/s", "value": status_data["result_mib_s"]},
+    ]
+
+    df = pd.DataFrame(metrics)
+
+    fig = px.bar(
+        df,
+        x="metric",
+        y="value",
+        title="Performance Metrics",
+        labels={"metric": "Metric", "value": "Value"},
+    )
+
+    fig.update_traces(
+        marker_color="rgb(99, 110, 250)",
+        hovertemplate="Metric: %{x}<br>Value: %{y:.3f}<extra></extra>",
+    )
+
+    fig.update_layout(bargap=0.4, showlegend=False)
+
+    return fig
+
+
 def main():
     st.set_page_config(page_title="ClickHouse Benchmark Visualization", layout="wide")
 
@@ -53,7 +105,9 @@ def main():
 
     # Input area for benchmark data
     st.subheader("Input Benchmark Data")
-    default_data = """0.000%          0.013 sec.
+    default_data = """clickhouse-systemlogs-eu-aiven-management-pavdmyt-test.avns.net:20001, queries: 30, QPS: 28.404, RPS: 17619645.884, MiB/s: 566.200, result RPS: 59733.005, result MiB/s: 14.272.
+
+0.000%          0.013 sec.
 10.000%         0.013 sec.
 20.000%         0.013 sec.
 30.000%         0.013 sec.
@@ -73,13 +127,41 @@ def main():
     )
 
     if benchmark_text:
-        # Parse the data
+        # Parse the status string and percentile data
+        status_data = parse_status_string(benchmark_text)
         df = parse_benchmark_output(benchmark_text)
 
-        # Create visualizations
-        col1, col2 = st.columns(2)
+        if status_data:
+            # Display benchmark information
+            st.subheader("Benchmark Information")
+            st.info(
+                f"📊 Running benchmarks against: **{status_data['endpoint']}**\n\n"
+                f"Number of queries executed: **{status_data['queries']}**"
+            )
 
-        with col1:
+            # Create two columns for performance metrics
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.metric("QPS", f"{status_data['qps']:.2f}")
+                st.metric("RPS", f"{status_data['rps']:,.0f}")
+
+            with col2:
+                st.metric("MiB/s", f"{status_data['mib_s']:.2f}")
+                st.metric("Result RPS", f"{status_data['result_rps']:,.0f}")
+
+            with col3:
+                st.metric("Result MiB/s", f"{status_data['result_mib_s']:.2f}")
+
+            # Add performance metrics chart
+            st.plotly_chart(
+                create_performance_metrics_chart(status_data), use_container_width=True
+            )
+
+        # Create visualizations for percentile data
+        col4, col5 = st.columns(2)
+
+        with col4:
             st.subheader("Query Latency Distribution")
             fig1 = px.line(
                 df,
@@ -102,9 +184,8 @@ def main():
 
             st.plotly_chart(fig1, use_container_width=True)
 
-        with col2:
+        with col5:
             st.subheader("Log-Scale View")
-            # Create a log-scale version to better visualize tail latency
             fig2 = go.Figure()
             fig2.add_trace(
                 go.Scatter(
@@ -129,31 +210,31 @@ def main():
 
             st.plotly_chart(fig2, use_container_width=True)
 
-        # Display summary statistics
-        st.subheader("Summary Statistics")
+        # Display latency statistics
+        st.subheader("Latency Statistics")
 
         # Display metrics
-        col3, col4, col5 = st.columns(3)
+        col6, col7, col8 = st.columns(3)
 
-        with col3:
+        with col6:
             st.metric(
                 "Median (P50) Latency",
                 f"{df[df['percentile'] == 50.0]['latency'].iloc[0]:.3f} sec",
             )
 
-        with col4:
+        with col7:
             st.metric(
                 "P95 Latency",
                 f"{df[df['percentile'] == 95.0]['latency'].iloc[0]:.3f} sec",
             )
 
-        with col5:
+        with col8:
             st.metric(
                 "P99 Latency",
                 f"{df[df['percentile'] == 99.0]['latency'].iloc[0]:.3f} sec",
             )
 
-        # Add bar chart for summary statistics
+        # Add bar chart for latency statistics
         st.plotly_chart(create_summary_bar_chart(df), use_container_width=True)
 
         # Show the processed data
