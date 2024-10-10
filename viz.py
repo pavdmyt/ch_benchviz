@@ -25,14 +25,7 @@ DEFAULT_DATA = """clickhouse-systemlogs-eu-aiven-management-pavdmyt-test.avns.ne
 99.990%         0.024 sec.
 """
 
-DEFAULT_QUERY = """SELECT
-    toStartOfFiveMinute(timestamp) AS ts,
-    countDistinct(user_id) AS users
-FROM user_actions
-WHERE timestamp >= now() - INTERVAL '1 hour'
-GROUP BY ts
-ORDER BY ts DESC
-"""
+DEFAULT_QUERY = """SELECT * FROM messages WHERE service_id = 40 LIMIT 50;"""
 
 
 def format_sql(query):
@@ -76,209 +69,255 @@ def parse_benchmark_output(text):
     return pd.DataFrame(data)
 
 
-def create_summary_bar_chart(df):
-    """Create a bar chart for key percentiles."""
-    key_percentiles = [50.0, 95.0, 99.0]
-    summary_data = df[df["percentile"].isin(key_percentiles)].copy()
-    summary_data["percentile_label"] = summary_data["percentile"].apply(
-        lambda x: f"P{int(x)}"
-    )
+def create_performance_metrics_chart(status_data1, status_data2):
+    """Create a bar chart for performance metrics of two queries."""
+    metrics = ["QPS", "RPS (M/sec)", "MiB/s", "Result RPS (K/sec)", "Result MiB/s"]
 
-    fig = px.bar(
-        summary_data,
-        x="percentile_label",
-        y="latency",
-        title="Key Percentile Latencies",
-        labels={"percentile_label": "Percentile", "latency": "Latency (seconds)"},
-    )
+    data = []
+    for metric in metrics:
+        if metric == "QPS":
+            data.append(
+                {
+                    "metric": metric,
+                    "Query 1": status_data1["qps"],
+                    "Query 2": status_data2["qps"],
+                }
+            )
+        elif metric == "RPS (M/sec)":
+            data.append(
+                {
+                    "metric": metric,
+                    "Query 1": status_data1["rps"] / 1_000_000,
+                    "Query 2": status_data2["rps"] / 1_000_000,
+                }
+            )
+        elif metric == "MiB/s":
+            data.append(
+                {
+                    "metric": metric,
+                    "Query 1": status_data1["mib_s"],
+                    "Query 2": status_data2["mib_s"],
+                }
+            )
+        elif metric == "Result RPS (K/sec)":
+            data.append(
+                {
+                    "metric": metric,
+                    "Query 1": status_data1["result_rps"] / 1_000,
+                    "Query 2": status_data2["result_rps"] / 1_000,
+                }
+            )
+        elif metric == "Result MiB/s":
+            data.append(
+                {
+                    "metric": metric,
+                    "Query 1": status_data1["result_mib_s"],
+                    "Query 2": status_data2["result_mib_s"],
+                }
+            )
 
-    fig.update_traces(
-        marker_color="rgb(136, 132, 216)",
-        hovertemplate="Percentile: %{x}<br>Latency: %{y:.3f} sec<extra></extra>",
-    )
-
-    fig.update_layout(bargap=0.4, showlegend=False)
-
-    return fig
-
-
-def create_performance_metrics_chart(status_data):
-    """Create a bar chart for performance metrics."""
-    # Prepare data for visualization
-    metrics = [
-        {"metric": "QPS", "value": status_data["qps"]},
-        {"metric": "RPS (M/sec)", "value": status_data["rps"] / 1_000_000},
-        {"metric": "MiB/s", "value": status_data["mib_s"]},
-        {"metric": "Result RPS (K/sec)", "value": status_data["result_rps"] / 1_000},
-        {"metric": "Result MiB/s", "value": status_data["result_mib_s"]},
-    ]
-
-    df = pd.DataFrame(metrics)
+    df = pd.DataFrame(data)
 
     fig = px.bar(
         df,
         x="metric",
-        y="value",
-        title="Performance Metrics",
-        labels={"metric": "Metric", "value": "Value"},
+        y=["Query 1", "Query 2"],
+        title="Performance Metrics Comparison",
+        labels={"value": "Value", "variable": "Query"},
+        barmode="group",
     )
 
-    fig.update_traces(
-        marker_color="rgb(99, 110, 250)",
-        hovertemplate="Metric: %{x}<br>Value: %{y:.3f}<extra></extra>",
+    fig.update_layout(bargap=0.2, bargroupgap=0.1)
+
+    return fig
+
+
+def create_latency_distribution_chart(df1, df2):
+    """Create a line chart for query latency distribution of two queries."""
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter(
+            x=df1["percentile"], y=df1["latency"], mode="lines+markers", name="Query 1"
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=df2["percentile"], y=df2["latency"], mode="lines+markers", name="Query 2"
+        )
     )
 
-    fig.update_layout(bargap=0.4, showlegend=False)
+    fig.update_layout(
+        title="Query Latency by Percentile (Comparison)",
+        xaxis_title="Percentile",
+        yaxis_title="Latency (seconds)",
+        hovermode="x unified",
+    )
+
+    return fig
+
+
+def create_summary_bar_chart(df1, df2):
+    """Create a bar chart for key percentiles of two queries."""
+    key_percentiles = [50.0, 95.0, 99.0]
+
+    data = []
+    for percentile in key_percentiles:
+        data.append(
+            {
+                "percentile": f"P{int(percentile)}",
+                "Query 1": df1[df1["percentile"] == percentile]["latency"].iloc[0],
+                "Query 2": df2[df2["percentile"] == percentile]["latency"].iloc[0],
+            }
+        )
+
+    df = pd.DataFrame(data)
+
+    fig = px.bar(
+        df,
+        x="percentile",
+        y=["Query 1", "Query 2"],
+        title="Key Percentile Latencies Comparison",
+        labels={"value": "Latency (seconds)", "variable": "Query"},
+        barmode="group",
+    )
+
+    fig.update_layout(bargap=0.2, bargroupgap=0.1)
 
     return fig
 
 
 def main():
-    st.set_page_config(page_title="ClickHouse Benchmark Visualization", layout="wide")
+    st.set_page_config(page_title="ClickHouse Benchmark Comparison", layout="wide")
 
-    st.title("ClickHouse Query Latency Analysis")
+    st.title("ClickHouse Query Benchmark Results - Comparison")
 
     # Input area for benchmark data
     st.subheader("Input Benchmark Data")
 
-    # Add query input field
-    query_text = st.text_area(
-        "Query being benchmarked:",
-        value=DEFAULT_QUERY,
-        height=150,
-        help="Enter the ClickHouse query that was used in the benchmark",
-    )
+    col1, col2 = st.columns(2)
 
-    # Add some visual separation
-    st.markdown("---")
+    with col1:
+        query_text1 = st.text_area(
+            "Query 1:", value=DEFAULT_QUERY, height=150, key="query1"
+        )
+        benchmark_text1 = st.text_area(
+            "Benchmark results for Query 1:",
+            value=DEFAULT_DATA,
+            height=300,
+            key="benchmark1",
+        )
 
-    # Existing benchmark results input
-    benchmark_text = st.text_area(
-        "Benchmark results:",
-        value=DEFAULT_DATA,
-        height=300,
-        help="Paste the complete benchmark output including the status line and percentile data",
-    )
+    with col2:
+        query_text2 = st.text_area(
+            "Query 2:", value=DEFAULT_QUERY, height=150, key="query2"
+        )
+        benchmark_text2 = st.text_area(
+            "Benchmark results for Query 2:",
+            value=DEFAULT_DATA,
+            height=300,
+            key="benchmark2",
+        )
 
-    if benchmark_text:
-        # Parse the status string and percentile data
-        status_data = parse_status_string(benchmark_text)
-        df = parse_benchmark_output(benchmark_text)
+    if benchmark_text1 and benchmark_text2:
+        status_data1 = parse_status_string(benchmark_text1)
+        status_data2 = parse_status_string(benchmark_text2)
+        df1 = parse_benchmark_output(benchmark_text1)
+        df2 = parse_benchmark_output(benchmark_text2)
 
-        if status_data:
-            # Display benchmark information
+        if status_data1 and status_data2:
             st.subheader("Benchmark Information")
-            st.info(
-                f"📊 Running benchmarks against: **{status_data['endpoint']}**\n\n"
-                f"Number of queries executed: **{status_data['queries']}**"
-            )
 
-            # Display formatted SQL query
-            st.subheader("Benchmarked Query")
-            formatted_sql = format_sql(query_text)
-            st.code(formatted_sql, language="sql")
-
-            # Display performance metrics
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                st.metric("QPS", f"{status_data['qps']:.2f}")
-                st.metric("RPS", f"{status_data['rps']:,.0f}")
-
-            with col2:
-                st.metric("MiB/s", f"{status_data['mib_s']:.2f}")
-                st.metric("Result RPS", f"{status_data['result_rps']:,.0f}")
+            col3, col4 = st.columns(2)
 
             with col3:
-                st.metric("Result MiB/s", f"{status_data['result_mib_s']:.2f}")
-
-            # Add performance metrics chart
-            st.plotly_chart(
-                create_performance_metrics_chart(status_data), use_container_width=True
-            )
-
-        # Create visualizations for percentile data
-        col4, col5 = st.columns(2)
-
-        with col4:
-            st.subheader("Query Latency Distribution")
-            fig1 = px.line(
-                df,
-                x="percentile",
-                y="latency",
-                markers=True,
-                title="Query Latency by Percentile",
-            )
-
-            fig1.update_layout(
-                xaxis_title="Percentile",
-                yaxis_title="Latency (seconds)",
-                hovermode="x",
-                showlegend=False,
-            )
-
-            fig1.update_traces(
-                hovertemplate="Percentile: %{x:.2f}<br>Latency: %{y:.3f} sec<extra></extra>"
-            )
-
-            st.plotly_chart(fig1, use_container_width=True)
-
-        with col5:
-            st.subheader("Log-Scale View")
-            fig2 = go.Figure()
-            fig2.add_trace(
-                go.Scatter(
-                    x=df["percentile"],
-                    y=df["latency"],
-                    mode="lines+markers",
-                    name="Latency",
+                st.subheader("Query 1")
+                st.code(format_sql(query_text1), language="sql")
+                st.info(
+                    f"📊 Running benchmarks against: **{status_data1['endpoint']}**\n\n"
+                    f"Number of queries executed: **{status_data1['queries']}**"
                 )
+
+                st.metric("QPS", f"{status_data1['qps']:.2f}")
+                st.metric("RPS", f"{status_data1['rps']:,.0f}")
+                st.metric("MiB/s", f"{status_data1['mib_s']:.2f}")
+                st.metric("Result RPS", f"{status_data1['result_rps']:,.0f}")
+                st.metric("Result MiB/s", f"{status_data1['result_mib_s']:.2f}")
+
+            with col4:
+                st.subheader("Query 2")
+                st.code(format_sql(query_text2), language="sql")
+                st.info(
+                    f"📊 Running benchmarks against: **{status_data2['endpoint']}**\n\n"
+                    f"Number of queries executed: **{status_data2['queries']}**"
+                )
+
+                st.metric("QPS", f"{status_data2['qps']:.2f}")
+                st.metric("RPS", f"{status_data2['rps']:,.0f}")
+                st.metric("MiB/s", f"{status_data2['mib_s']:.2f}")
+                st.metric("Result RPS", f"{status_data2['result_rps']:,.0f}")
+                st.metric("Result MiB/s", f"{status_data2['result_mib_s']:.2f}")
+
+            # Performance metrics comparison chart
+            st.plotly_chart(
+                create_performance_metrics_chart(status_data1, status_data2),
+                use_container_width=True,
             )
 
-            fig2.update_layout(
-                title="Query Latency by Percentile (Log Scale)",
-                xaxis_title="Percentile",
-                yaxis_title="Latency (seconds)",
-                yaxis_type="log",
-                hovermode="x",
+            # Query Latency Distribution comparison chart
+            st.plotly_chart(
+                create_latency_distribution_chart(df1, df2), use_container_width=True
             )
 
-            fig2.update_traces(
-                hovertemplate="Percentile: %{x:.2f}<br>Latency: %{y:.3f} sec<extra></extra>"
+            # Latency Statistics
+            st.subheader("Latency Statistics")
+
+            col5, col6 = st.columns(2)
+
+            with col5:
+                st.subheader("Query 1")
+                st.metric(
+                    "Median (P50) Latency",
+                    f"{df1[df1['percentile'] == 50.0]['latency'].iloc[0]:.3f} sec",
+                )
+                st.metric(
+                    "P95 Latency",
+                    f"{df1[df1['percentile'] == 95.0]['latency'].iloc[0]:.3f} sec",
+                )
+                st.metric(
+                    "P99 Latency",
+                    f"{df1[df1['percentile'] == 99.0]['latency'].iloc[0]:.3f} sec",
+                )
+
+            with col6:
+                st.subheader("Query 2")
+                st.metric(
+                    "Median (P50) Latency",
+                    f"{df2[df2['percentile'] == 50.0]['latency'].iloc[0]:.3f} sec",
+                )
+                st.metric(
+                    "P95 Latency",
+                    f"{df2[df2['percentile'] == 95.0]['latency'].iloc[0]:.3f} sec",
+                )
+                st.metric(
+                    "P99 Latency",
+                    f"{df2[df2['percentile'] == 99.0]['latency'].iloc[0]:.3f} sec",
+                )
+
+            # Key Percentile Latencies comparison chart
+            st.plotly_chart(
+                create_summary_bar_chart(df1, df2), use_container_width=True
             )
 
-            st.plotly_chart(fig2, use_container_width=True)
-
-        # Display latency statistics
-        st.subheader("Latency Statistics")
-
-        # Display metrics
-        col6, col7, col8 = st.columns(3)
-
-        with col6:
-            st.metric(
-                "Median (P50) Latency",
-                f"{df[df['percentile'] == 50.0]['latency'].iloc[0]:.3f} sec",
-            )
-
-        with col7:
-            st.metric(
-                "P95 Latency",
-                f"{df[df['percentile'] == 95.0]['latency'].iloc[0]:.3f} sec",
-            )
-
-        with col8:
-            st.metric(
-                "P99 Latency",
-                f"{df[df['percentile'] == 99.0]['latency'].iloc[0]:.3f} sec",
-            )
-
-        # Add bar chart for latency statistics
-        st.plotly_chart(create_summary_bar_chart(df), use_container_width=True)
-
-        # Show the processed data
-        st.subheader("Raw Data")
-        st.dataframe(df)
+            # Show the processed data
+            st.subheader("Raw Data")
+            col7, col8 = st.columns(2)
+            with col7:
+                st.subheader("Query 1")
+                st.dataframe(df1)
+            with col8:
+                st.subheader("Query 2")
+                st.dataframe(df2)
 
 
 if __name__ == "__main__":
