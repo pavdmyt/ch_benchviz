@@ -3,9 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import re
-
 import sqlparse
-
 
 DEFAULT_DATA = """clickhouse-systemlogs-eu-aiven-management-pavdmyt-test.avns.net:20001, queries: 30, QPS: 28.404, RPS: 17619645.884, MiB/s: 566.200, result RPS: 59733.005, result MiB/s: 14.272.
 
@@ -27,20 +25,23 @@ DEFAULT_DATA = """clickhouse-systemlogs-eu-aiven-management-pavdmyt-test.avns.ne
 
 DEFAULT_QUERY = """SELECT * FROM messages WHERE service_id = 40 LIMIT 50;"""
 
+STATUS_REGEX = re.compile(
+    r"([\w.-]+:\d+),\s*queries:\s*(\d+),\s*QPS:\s*([\d.]+),\s*RPS:\s*([\d.]+),\s*MiB/s:\s*([\d.]+),\s*result RPS:\s*([\d.]+),\s*result MiB/s:\s*([\d.]+)"
+)
 
-def format_sql(query):
+PERCENTILE_REGEX = re.compile(r"(\d+\.?\d*)%\s+(\d+\.\d+)\s+sec")
+
+KEY_PERCENTILES = [50.0, 95.0, 99.0]
+
+
+def format_sql(query: str) -> str:
     """Format the SQL query."""
     return sqlparse.format(query, reindent=True, keyword_case="upper")
 
 
-def parse_status_string(text):
+def parse_status_string(text: str) -> dict:
     """Parse the benchmark status string into a dictionary."""
-    # Find the status string using regex
-    status_match = re.search(
-        r"([\w.-]+:\d+),\s*queries:\s*(\d+),\s*QPS:\s*([\d.]+),\s*RPS:\s*([\d.]+),\s*MiB/s:\s*([\d.]+),\s*result RPS:\s*([\d.]+),\s*result MiB/s:\s*([\d.]+)",
-        text,
-    )
-
+    status_match = STATUS_REGEX.search(text)
     if status_match:
         return {
             "endpoint": status_match.group(1),
@@ -54,14 +55,13 @@ def parse_status_string(text):
     return None
 
 
-def parse_benchmark_output(text):
+def parse_benchmark_output(text: str) -> pd.DataFrame:
     """Parse the benchmark output text into a DataFrame."""
     lines = text.strip().split("\n")
     data = []
 
     for line in lines:
-        # Match lines containing percentile data
-        match = re.match(r"(\d+\.?\d*)%\s+(\d+\.\d+)\s+sec", line)
+        match = PERCENTILE_REGEX.match(line)
         if match:
             percentile, latency = match.groups()
             data.append({"percentile": float(percentile), "latency": float(latency)})
@@ -69,11 +69,28 @@ def parse_benchmark_output(text):
     return pd.DataFrame(data)
 
 
-def create_performance_metrics_chart(status_data1, status_data2):
+def create_bar_chart(data: list, title: str, x_label: str, y_label: str) -> go.Figure:
+    """Create a bar chart from the given data."""
+    df = pd.DataFrame(data)
+    fig = px.bar(
+        df,
+        x=x_label,
+        y=["Query 1", "Query 2"],
+        title=title,
+        labels={"value": y_label, "variable": "Query"},
+        barmode="group",
+    )
+    fig.update_layout(bargap=0.2, bargroupgap=0.1)
+    return fig
+
+
+def create_performance_metrics_chart(
+    status_data1: dict, status_data2: dict
+) -> go.Figure:
     """Create a bar chart for performance metrics of two queries."""
     metrics = ["QPS", "RPS (M/sec)", "MiB/s", "Result RPS (K/sec)", "Result MiB/s"]
-
     data = []
+
     for metric in metrics:
         if metric == "QPS":
             data.append(
@@ -116,26 +133,14 @@ def create_performance_metrics_chart(status_data1, status_data2):
                 }
             )
 
-    df = pd.DataFrame(data)
-
-    fig = px.bar(
-        df,
-        x="metric",
-        y=["Query 1", "Query 2"],
-        title="Performance Metrics Comparison",
-        labels={"value": "Value", "variable": "Query"},
-        barmode="group",
-    )
-
-    fig.update_layout(bargap=0.2, bargroupgap=0.1)
-
-    return fig
+    return create_bar_chart(data, "Performance Metrics Comparison", "metric", "Value")
 
 
-def create_latency_distribution_chart(df1, df2):
+def create_latency_distribution_chart(
+    df1: pd.DataFrame, df2: pd.DataFrame
+) -> go.Figure:
     """Create a line chart for query latency distribution of two queries."""
     fig = go.Figure()
-
     fig.add_trace(
         go.Scatter(
             x=df1["percentile"], y=df1["latency"], mode="lines+markers", name="Query 1"
@@ -146,23 +151,19 @@ def create_latency_distribution_chart(df1, df2):
             x=df2["percentile"], y=df2["latency"], mode="lines+markers", name="Query 2"
         )
     )
-
     fig.update_layout(
         title="Query Latency by Percentile (Comparison)",
         xaxis_title="Percentile",
         yaxis_title="Latency (seconds)",
         hovermode="x unified",
     )
-
     return fig
 
 
-def create_summary_bar_chart(df1, df2):
+def create_summary_bar_chart(df1: pd.DataFrame, df2: pd.DataFrame) -> go.Figure:
     """Create a bar chart for key percentiles of two queries."""
-    key_percentiles = [50.0, 95.0, 99.0]
-
     data = []
-    for percentile in key_percentiles:
+    for percentile in KEY_PERCENTILES:
         data.append(
             {
                 "percentile": f"P{int(percentile)}",
@@ -171,36 +172,25 @@ def create_summary_bar_chart(df1, df2):
             }
         )
 
-    df = pd.DataFrame(data)
-
-    fig = px.bar(
-        df,
-        x="percentile",
-        y=["Query 1", "Query 2"],
-        title="Key Percentile Latencies Comparison",
-        labels={"value": "Latency (seconds)", "variable": "Query"},
-        barmode="group",
+    return create_bar_chart(
+        data, "Key Percentile Latencies Comparison", "percentile", "Latency (seconds)"
     )
-
-    fig.update_layout(bargap=0.2, bargroupgap=0.1)
-
-    return fig
 
 
 def main():
     st.set_page_config(page_title="ClickHouse Benchmark Comparison", layout="wide")
-
     st.title("ClickHouse Query Benchmark Results - Comparison")
 
-    # Input area for benchmark data
+    # Input section for benchmark data
     st.subheader("Input Benchmark Data")
-
     col1, col2 = st.columns(2)
 
     with col1:
+        # Text area for Query 1
         query_text1 = st.text_area(
             "Query 1:", value=DEFAULT_QUERY, height=150, key="query1"
         )
+        # Text area for Benchmark results of Query 1
         benchmark_text1 = st.text_area(
             "Benchmark results for Query 1:",
             value=DEFAULT_DATA,
@@ -209,9 +199,11 @@ def main():
         )
 
     with col2:
+        # Text area for Query 2
         query_text2 = st.text_area(
             "Query 2:", value=DEFAULT_QUERY, height=150, key="query2"
         )
+        # Text area for Benchmark results of Query 2
         benchmark_text2 = st.text_area(
             "Benchmark results for Query 2:",
             value=DEFAULT_DATA,
@@ -219,25 +211,29 @@ def main():
             key="benchmark2",
         )
 
+    # Check if both benchmark texts are provided
     if benchmark_text1 and benchmark_text2:
+        # Parse the benchmark status strings
         status_data1 = parse_status_string(benchmark_text1)
         status_data2 = parse_status_string(benchmark_text2)
+        # Parse the benchmark output into DataFrames
         df1 = parse_benchmark_output(benchmark_text1)
         df2 = parse_benchmark_output(benchmark_text2)
 
+        # Check if both status data are successfully parsed
         if status_data1 and status_data2:
             st.subheader("Benchmark Information")
-
             col3, col4 = st.columns(2)
 
             with col3:
                 st.subheader("Query 1")
+                # Display formatted SQL query for Query 1
                 st.code(format_sql(query_text1), language="sql")
+                # Display benchmark information for Query 1
                 st.info(
-                    f"📊 Running benchmarks against: **{status_data1['endpoint']}**\n\n"
-                    f"Number of queries executed: **{status_data1['queries']}**"
+                    f"📊 Running benchmarks against: **{status_data1['endpoint']}**\n\nNumber of queries executed: **{status_data1['queries']}**"
                 )
-
+                # Display metrics for Query 1
                 st.metric("QPS", f"{status_data1['qps']:.2f}")
                 st.metric("RPS", f"{status_data1['rps']:,.0f}")
                 st.metric("MiB/s", f"{status_data1['mib_s']:.2f}")
@@ -248,10 +244,8 @@ def main():
                 st.subheader("Query 2")
                 st.code(format_sql(query_text2), language="sql")
                 st.info(
-                    f"📊 Running benchmarks against: **{status_data2['endpoint']}**\n\n"
-                    f"Number of queries executed: **{status_data2['queries']}**"
+                    f"📊 Running benchmarks against: **{status_data2['endpoint']}**\n\nNumber of queries executed: **{status_data2['queries']}**"
                 )
-
                 st.metric("QPS", f"{status_data2['qps']:.2f}")
                 st.metric("RPS", f"{status_data2['rps']:,.0f}")
                 st.metric("MiB/s", f"{status_data2['mib_s']:.2f}")
@@ -271,7 +265,6 @@ def main():
 
             # Latency Statistics
             st.subheader("Latency Statistics")
-
             col5, col6 = st.columns(2)
 
             with col5:
