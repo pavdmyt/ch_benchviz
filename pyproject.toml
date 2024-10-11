@@ -1,7 +1,7 @@
 [project]
-name = "ch-bench"
+name = "ch_benchviz"
 version = "0.1.0"
-description = "Add your description here"
+description = "A Streamlit-based tool for visualizing and comparing ClickHouse query benchmark results"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

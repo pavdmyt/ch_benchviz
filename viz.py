@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import re
 import sqlparse
 
-DEFAULT_DATA = """clickhouse-systemlogs-eu-aiven-management-pavdmyt-test.avns.net:20001, queries: 30, QPS: 28.404, RPS: 17619645.884, MiB/s: 566.200, result RPS: 59733.005, result MiB/s: 14.272.
+DEFAULT_DATA = """localhost:9000, queries: 30, QPS: 28.404, RPS: 17619645.884, MiB/s: 566.200, result RPS: 59733.005, result MiB/s: 14.272.
 
 0.000%          0.013 sec.
 10.000%         0.013 sec.
@@ -27,7 +27,7 @@ DEFAULT_DATA = """clickhouse-systemlogs-eu-aiven-management-pavdmyt-test.avns.ne
 STATUS_REGEX = re.compile(
     r"([\w.-]+:\d+),\s*queries:\s*(\d+),\s*QPS:\s*([\d.]+),\s*RPS:\s*([\d.]+),\s*MiB/s:\s*([\d.]+),\s*result RPS:\s*([\d.]+),\s*result MiB/s:\s*([\d.]+)"
 )
-DEFAULT_QUERY = """SELECT * FROM messages WHERE service_id = 40 LIMIT 50;"""
+DEFAULT_QUERY = """SELECT * FROM messages LIMIT 50;"""
 PERCENTILE_REGEX = re.compile(r"(\d+\.?\d*)%\s+(\d+\.\d+)\s+sec")
 KEY_PERCENTILES = [50.0, 95.0, 99.0]
 COLORSCHEME = px.colors.qualitative.D3
