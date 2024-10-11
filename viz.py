@@ -23,15 +23,14 @@ DEFAULT_DATA = """clickhouse-systemlogs-eu-aiven-management-pavdmyt-test.avns.ne
 99.990%         0.024 sec.
 """
 
-DEFAULT_QUERY = """SELECT * FROM messages WHERE service_id = 40 LIMIT 50;"""
 
 STATUS_REGEX = re.compile(
     r"([\w.-]+:\d+),\s*queries:\s*(\d+),\s*QPS:\s*([\d.]+),\s*RPS:\s*([\d.]+),\s*MiB/s:\s*([\d.]+),\s*result RPS:\s*([\d.]+),\s*result MiB/s:\s*([\d.]+)"
 )
-
+DEFAULT_QUERY = """SELECT * FROM messages WHERE service_id = 40 LIMIT 50;"""
 PERCENTILE_REGEX = re.compile(r"(\d+\.?\d*)%\s+(\d+\.\d+)\s+sec")
-
 KEY_PERCENTILES = [50.0, 95.0, 99.0]
+COLORSCHEME = px.colors.qualitative.D3
 
 
 def format_sql(query: str) -> str:
@@ -79,6 +78,7 @@ def create_bar_chart(data: list, title: str, x_label: str, y_label: str) -> go.F
         title=title,
         labels={"value": y_label, "variable": "Query"},
         barmode="group",
+        color_discrete_sequence=COLORSCHEME[:2],
     )
     fig.update_layout(bargap=0.2, bargroupgap=0.1)
     return fig
@@ -113,7 +113,7 @@ def create_performance_metrics_charts(status_data1: dict, status_data2: dict) ->
             labels={"Value": title},
             text="Value",
             color="Query",
-            color_discrete_sequence=px.colors.qualitative.D3[:2],
+            color_discrete_sequence=COLORSCHEME[:2],
             height=400,
         )
         fig.update_traces(texttemplate="%{text:.2f}", textposition="outside")
