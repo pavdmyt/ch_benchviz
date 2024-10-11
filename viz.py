@@ -128,21 +128,11 @@ def create_performance_metrics_charts(status_data1: dict, status_data2: dict) ->
     return charts
 
 
-def create_latency_distribution_chart(
-    df1: pd.DataFrame, df2: pd.DataFrame
-) -> go.Figure:
+def create_latency_distribution_chart(df1: pd.DataFrame, df2: pd.DataFrame) -> go.Figure:
     """Create a line chart for query latency distribution of two queries."""
     fig = go.Figure()
-    fig.add_trace(
-        go.Scatter(
-            x=df1["percentile"], y=df1["latency"], mode="lines+markers", name="Query 1"
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=df2["percentile"], y=df2["latency"], mode="lines+markers", name="Query 2"
-        )
-    )
+    fig.add_trace(go.Scatter(x=df1["percentile"], y=df1["latency"], mode="lines+markers", name="Query 1"))
+    fig.add_trace(go.Scatter(x=df2["percentile"], y=df2["latency"], mode="lines+markers", name="Query 2"))
     fig.update_layout(
         title="Query Latency by Percentile (Comparison)",
         xaxis_title="Percentile",
@@ -164,9 +154,7 @@ def create_summary_bar_chart(df1: pd.DataFrame, df2: pd.DataFrame) -> go.Figure:
             }
         )
 
-    return create_bar_chart(
-        data, "Key Percentile Latencies Comparison", "percentile", "Latency (seconds)"
-    )
+    return create_bar_chart(data, "Key Percentile Latencies Comparison", "percentile", "Latency (seconds)")
 
 
 def main():
@@ -179,9 +167,7 @@ def main():
 
     with col1:
         # Text area for Query 1
-        query_text1 = st.text_area(
-            "Query 1:", value=DEFAULT_QUERY, height=150, key="query1"
-        )
+        query_text1 = st.text_area("Query 1:", value=DEFAULT_QUERY, height=150, key="query1")
         # Text area for Benchmark results of Query 1
         benchmark_text1 = st.text_area(
             "Benchmark results for Query 1:",
@@ -192,9 +178,7 @@ def main():
 
     with col2:
         # Text area for Query 2
-        query_text2 = st.text_area(
-            "Query 2:", value=DEFAULT_QUERY, height=150, key="query2"
-        )
+        query_text2 = st.text_area("Query 2:", value=DEFAULT_QUERY, height=150, key="query2")
         # Text area for Benchmark results of Query 2
         benchmark_text2 = st.text_area(
             "Benchmark results for Query 2:",
@@ -246,9 +230,7 @@ def main():
 
             # Performance metrics comparison chart
             st.subheader("Performance Metrics Comparison")
-            metric_charts = create_performance_metrics_charts(
-                status_data1, status_data2
-            )
+            metric_charts = create_performance_metrics_charts(status_data1, status_data2)
             cols = st.columns(len(metric_charts))
             # Display each chart in its own column
             for i, chart in enumerate(metric_charts):
@@ -256,9 +238,7 @@ def main():
                     st.plotly_chart(chart, use_container_width=True)
 
             # Query Latency Distribution comparison chart
-            st.plotly_chart(
-                create_latency_distribution_chart(df1, df2), use_container_width=True
-            )
+            st.plotly_chart(create_latency_distribution_chart(df1, df2), use_container_width=True)
 
             # Latency Statistics
             st.subheader("Latency Statistics")
@@ -295,9 +275,7 @@ def main():
                 )
 
             # Key Percentile Latencies comparison chart
-            st.plotly_chart(
-                create_summary_bar_chart(df1, df2), use_container_width=True
-            )
+            st.plotly_chart(create_summary_bar_chart(df1, df2), use_container_width=True)
 
             # Show the processed data
             st.subheader("Raw Data")

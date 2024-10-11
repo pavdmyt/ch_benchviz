@@ -1,0 +1,18 @@
+# This is a configuration file for Ruff, a Python linter and code formatter.
+# It specifies the target Python version, line length, exclusion rules, and linting/formatting options, among others.
+
+# For more information about how Ruff is configured, refer to:
+# https://docs.astral.sh/ruff/configuration/
+
+# For a complete enumeration of the available configuration options, refer to:
+# https://docs.astral.sh/ruff/settings/
+
+# For a complete enumeration of the available rule set, refer to:
+# https://docs.astral.sh/ruff/rules/
+
+# The minimum Python version to target, e.g., when considering automatic code upgrades, like rewriting type annotations.
+target-version = "py312"
+
+# The line length to use when enforcing long-lines violations (like 'E501') and at which isort and the formatter prefers to wrap lines.
+line-length = 125
+
