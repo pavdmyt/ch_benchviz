@@ -84,56 +84,48 @@ def create_bar_chart(data: list, title: str, x_label: str, y_label: str) -> go.F
     return fig
 
 
-def create_performance_metrics_chart(
-    status_data1: dict, status_data2: dict
-) -> go.Figure:
-    """Create a bar chart for performance metrics of two queries."""
-    metrics = ["QPS", "RPS (M/sec)", "MiB/s", "Result RPS (K/sec)", "Result MiB/s"]
-    data = []
+def create_performance_metrics_charts(status_data1: dict, status_data2: dict) -> list:
+    """Create multiple bar charts for performance metrics of two queries."""
+    metrics = [
+        ("QPS", "qps"),
+        ("RPS (M/sec)", "rps", 1_000_000),
+        ("MiB/s", "mib_s"),
+        ("Result RPS (K/sec)", "result_rps", 1_000),
+        ("Result MiB/s", "result_mib_s"),
+    ]
 
+    charts = []
     for metric in metrics:
-        if metric == "QPS":
-            data.append(
-                {
-                    "metric": metric,
-                    "Query 1": status_data1["qps"],
-                    "Query 2": status_data2["qps"],
-                }
-            )
-        elif metric == "RPS (M/sec)":
-            data.append(
-                {
-                    "metric": metric,
-                    "Query 1": status_data1["rps"] / 1_000_000,
-                    "Query 2": status_data2["rps"] / 1_000_000,
-                }
-            )
-        elif metric == "MiB/s":
-            data.append(
-                {
-                    "metric": metric,
-                    "Query 1": status_data1["mib_s"],
-                    "Query 2": status_data2["mib_s"],
-                }
-            )
-        elif metric == "Result RPS (K/sec)":
-            data.append(
-                {
-                    "metric": metric,
-                    "Query 1": status_data1["result_rps"] / 1_000,
-                    "Query 2": status_data2["result_rps"] / 1_000,
-                }
-            )
-        elif metric == "Result MiB/s":
-            data.append(
-                {
-                    "metric": metric,
-                    "Query 1": status_data1["result_mib_s"],
-                    "Query 2": status_data2["result_mib_s"],
-                }
-            )
+        title, key = metric[0], metric[1]
+        divisor = metric[2] if len(metric) > 2 else 1
 
-    return create_bar_chart(data, "Performance Metrics Comparison", "metric", "Value")
+        data = pd.DataFrame(
+            {
+                "Query": ["Query 1", "Query 2"],
+                "Value": [status_data1[key] / divisor, status_data2[key] / divisor],
+            }
+        )
+        fig = px.bar(
+            data,
+            x="Query",
+            y="Value",
+            title=title,
+            labels={"Value": title},
+            text="Value",
+            color="Query",
+            color_discrete_sequence=px.colors.qualitative.D3[:2],
+            height=400,
+        )
+        fig.update_traces(texttemplate="%{text:.2f}", textposition="outside")
+        fig.update_layout(
+            uniformtext_minsize=8,
+            uniformtext_mode="hide",
+            margin=dict(l=10, r=10, t=50, b=10),
+            showlegend=False,
+        )
+        charts.append(fig)
+
+    return charts
 
 
 def create_latency_distribution_chart(
@@ -253,10 +245,15 @@ def main():
                 st.metric("Result MiB/s", f"{status_data2['result_mib_s']:.2f}")
 
             # Performance metrics comparison chart
-            st.plotly_chart(
-                create_performance_metrics_chart(status_data1, status_data2),
-                use_container_width=True,
+            st.subheader("Performance Metrics Comparison")
+            metric_charts = create_performance_metrics_charts(
+                status_data1, status_data2
             )
+            cols = st.columns(len(metric_charts))
+            # Display each chart in its own column
+            for i, chart in enumerate(metric_charts):
+                with cols[i]:
+                    st.plotly_chart(chart, use_container_width=True)
 
             # Query Latency Distribution comparison chart
             st.plotly_chart(
